@@ -55,6 +55,7 @@ function getAbstract(doc, cb) {
     var xml = fs.readFileSync(doc.xmlFile).toString();
     parseString(xml, function (err, result) {
         doc.abstract = result.paper.abstract[0];
+        console.log(doc.doi);
         cb();
     });
 }
@@ -70,6 +71,7 @@ loadTags(CITEULIKE_TAGS_FNAME, function (tagMap) {
                 var taggedDocs = [];
                 validDocs.forEach(function (doc) {
                     if (tagMap[doc.id] && tagMap[doc.id].length > 0) {
+                        doc.tags = tagMap[doc.id];
                         taggedDocs.push(doc);
                     }
                 });
