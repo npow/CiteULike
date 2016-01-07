@@ -5,7 +5,7 @@ var util = require('util');
 
 var CITESEERX_DIR = 'k0.7j-nsw-3g-t-citeseerx-pub/papers';
 var CITESEER_DOCS_FNAME = 'citeseer.txt';
-var CITEULIKE_TAGS_FNAME = 'current_small';
+var CITEULIKE_TAGS_FNAME = 'current';
 
 function loadDocs(fname, cb) {
     var lineReader = require('readline').createInterface({
