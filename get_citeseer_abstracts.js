@@ -1,59 +1,80 @@
 var async = require('async');
 var fs = require('fs');
 var parseString = require('xml2js').parseString;
+var util = require('util');
 
 var CITESEERX_DIR = 'k0.7j-nsw-3g-t-citeseerx-pub/papers';
-var FNAME = 'citeseer.txt';
+var CITESEER_DOCS_FNAME = 'citeseer.txt';
+var CITEULIKE_TAGS_FNAME = 'current_small';
 
-function loadDocs(fname) {
-    var docs = fs.readFileSync(fname).toString().split('\n').filter(function (x) {
-        return line.indexOf('viewdoc') > -1;
-    }).map(function (x) {
-        var L = x.split();
-        var id = L[0];
-        var url = L[1];
-        var doi = url.substr(url.indexOf('='));
-        return { id: id, doi: doi };
+function loadDocs(fname, cb) {
+    var lineReader = require('readline').createInterface({
+        input: fs.createReadStream(fname),
+        terminal: false
     });
-    return docs;
+
+    var docs = [];
+    lineReader.on('line', function (x) {
+        x = x.replace('\n', '');
+        if (x.indexOf('viewdoc') > -1) {
+            var L = x.split(' ');
+            var id = L[0];
+            var url = L[1];
+            var doi = url.substr(url.indexOf('=')+1);
+            docs.push({ id: id, doi: doi, xmlFile: util.format('%s/%s.xml', CITESEERX_DIR, doi) });
+        }
+    });
+    lineReader.on('close', function () {
+        cb(docs);
+    });
 }
 
-function loadTags(fname) {
+function loadTags(fname, cb) {
     var tagMap = {};
-    fs.readFileSync(fname).toString().split('\n').filter(function (x) {
-        return line.trim().length > 0;
-    }).map(function (x) {
-        var L = x.split('|');
-        var id = L[0];
-        var tag = L[3];
-        tagMap[id] ||= [];
-        tagMap[id].push(tag);
+    var lineReader = require('readline').createInterface({
+        input: fs.createReadStream(fname),
+        terminal: false
     });
-    return tagMap;
-}
 
-function getTags(doc, cb) {
-    return tagMap[doc.id] || [];
+    lineReader.on('line', function (x) {
+        x = x.replace('\n', '');
+        if (x.trim().length > 0) {
+            var L = x.split('|');
+            var id = L[0];
+            var tag = L[3];
+            tagMap[id] = tagMap[id] || [];
+            tagMap[id].push(tag);
+        }
+    });
+    lineReader.on('close', function () {
+        cb(tagMap);
+    });
 }
 
 function getAbstract(doc, cb) {
     var xml = fs.readFileSync(doc.xmlFile).toString();
     parseString(xml, function (err, result) {
-        return result.paper.abstract;
+        doc.abstract = result.paper.abstract[0];
+        cb();
     });
 }
 
-docs.forEach(function (doc) {
-    doc.xmlFile = util.format('%s/%s.xml', CITESEERX_DIR, doc.doi);
-});
-async.filter(docs, function (doc, docCB) {
-    fs.exists(doc.xmlFile, docCB);
-}, function (validDocs) {
-    async.map(validDocs, function (doc, docCB) {
-        getAbstract(doc, docCB);
-    }, function (err, results) {
-        async.map(results, getTags, function (err, taggedResults) {
-            fs.writeFileSync('citeseer.json', JSON.stringify(taggedResults));
+loadTags(CITEULIKE_TAGS_FNAME, function (tagMap) {
+    loadDocs(CITESEER_DOCS_FNAME, function (docs) {
+        async.filter(docs, function (doc, docCB) {
+            fs.exists(doc.xmlFile, docCB);
+        }, function (validDocs) {
+            async.each(validDocs, function (doc, docCB) {
+                getAbstract(doc, docCB);
+            }, function (err) {
+                var taggedDocs = [];
+                validDocs.forEach(function (doc) {
+                    if (tagMap[doc.id] && tagMap[doc.id].length > 0) {
+                        taggedDocs.push(doc);
+                    }
+                });
+                fs.writeFileSync('citeseer.json', JSON.stringify(taggedDocs));
+            });
         });
     });
 });
